@@ -1,0 +1,111 @@
+From 02ab54068c977c4a53bdf43202111623a9ac7fe2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nicolas=20Vi=C3=A9ville?= <nicolas.vieville@uphf.fr>
+Date: Sun, 13 Sep 2026 18:45:17 +0200
+Subject: [PATCH] Linux 7.2: remove strncpy kernel function - Related to commit
+ "string: Remove strncpy() from the kernel" (Kees Cook, 23 Mar 2026)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Nicolas Viéville <nicolas.vieville@uphf.fr>
+---
+ kernel/nvidia-modeset/nvidia-modeset-linux.c | 7 +++++++
+ kernel/nvidia-uvm/uvm8_pmm_gpu.c             | 7 +++++++
+ kernel/nvidia/nv-gpu-numa.c                  | 7 +++++++
+ kernel/nvidia/os-interface.c                 | 6 ++++++
+ 4 files changed, 27 insertions(+)
+
+diff --git a/nvidia-modeset/nvidia-modeset-linux.c b/nvidia-modeset/nvidia-modeset-linux.c
+index e3101fd..6550612 100644
+--- a/nvidia-modeset/nvidia-modeset-linux.c
++++ b/nvidia-modeset/nvidia-modeset-linux.c
+@@ -181,7 +181,14 @@ int NVKMS_API_CALL nvkms_strcmp(const char *s1, const char *s2)
+ 
+ char* NVKMS_API_CALL nvkms_strncpy(char *dest, const char *src, size_t n)
+ {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
++    // Related to commit "string: Remove strncpy() from the kernel" 
++    // (Kees Cook, 18 Jun 2026)
++	strscpy_pad(dest, src, n);
++	return (dest);
++#else
+     return strncpy(dest, src, n);
++#endif
+ }
+ 
+ void NVKMS_API_CALL nvkms_usleep(NvU64 usec)
+diff --git a/nvidia-uvm/uvm8_pmm_gpu.c b/nvidia-uvm/uvm8_pmm_gpu.c
+index 6f0857e..11d0d46 100644
+--- a/nvidia-uvm/uvm8_pmm_gpu.c
++++ b/nvidia-uvm/uvm8_pmm_gpu.c
+@@ -159,6 +159,7 @@
+ // bug 1775408).
+ //
+ 
++#include <linux/version.h>
+ #include "uvm_common.h"
+ #include "nv_uvm_interface.h"
+ #include "uvm8_gpu.h"
+@@ -2794,7 +2795,13 @@ NV_STATUS init_chunk_split_cache_level(uvm_pmm_gpu_t *pmm, size_t level)
+             size_t size;
+             size_t align;
+             if (level == 0) {
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
++                // Related to commit "string: Remove strncpy() from the kernel" 
++                // (Kees Cook, 18 Jun 2026)
++                strscpy(chunk_split_cache[level].name, "uvm_gpu_chunk_t", sizeof(chunk_split_cache[level].name));
++#else
+                 strncpy(chunk_split_cache[level].name, "uvm_gpu_chunk_t", sizeof(chunk_split_cache[level].name) - 1);
++#endif
+                 size = sizeof(uvm_gpu_chunk_t);
+                 align = __alignof__(uvm_gpu_chunk_t);
+             } else {
+diff --git a/nvidia/nv-gpu-numa.c b/nvidia/nv-gpu-numa.c
+index a87df36..459f285 100644
+--- a/nvidia/nv-gpu-numa.c
++++ b/nvidia/nv-gpu-numa.c
+@@ -21,6 +21,7 @@
+ 
+ *******************************************************************************/
+ 
++#include <linux/version.h>
+ #include "nv-linux.h"
+ #include "nv-gpu-numa.h"
+ #include "nvmisc.h"
+@@ -158,8 +159,14 @@ static int filldir_get_memblock_id(struct dir_context *ctx,
+     if (name_len + 1 > BUF_SIZE)
+         return -ERANGE;
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
++    // Related to commit "string: Remove strncpy() from the kernel" 
++    // (Kees Cook, 18 Jun 2026)
++    strscpy(name_copy, name, name_len + 1);
++#else
+     strncpy(name_copy, name, name_len);
+     *(name_copy + name_len) = '\0';
++#endif
+ 
+     // Convert the memory block ID into an integer
+     if (kstrtoull(name_copy + strlen(MEMBLOCK_PREFIX), 0, &memblock_id) != 0) 
+diff --git a/nvidia/os-interface.c b/nvidia/os-interface.c
+index b503537..96df8f4 100644
+--- a/nvidia/os-interface.c
++++ b/nvidia/os-interface.c
+@@ -657,8 +657,14 @@ NvU32 NV_API_CALL os_get_current_process(void)
+ void NV_API_CALL os_get_current_process_name(char *buf, NvU32 len)
+ {
+     task_lock(current);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
++    // Related to commit "string: Remove strncpy() from the kernel" 
++    // (Kees Cook, 18 Jun 2026)
++    strscpy(buf, current->comm, len);
++#else
+     strncpy(buf, current->comm, len - 1);
+     buf[len - 1] = '\0';
++#endif
+     task_unlock(current);
+ }
+ 
+-- 
+2.55.0
+
