@@ -1,0 +1,1 @@
+# nvidia-390xx-cachyos-kernel-7.2
