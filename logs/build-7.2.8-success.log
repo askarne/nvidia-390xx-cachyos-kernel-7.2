@@ -1,0 +1,53 @@
+NVIDIA 390.157 — CachyOS kernel 7.2.8 build log
+
+Environment:
+  Kernel: 7.2.8-1-cachyos
+  DKMS: 3.4.3
+  NVIDIA DKMS package: nvidia-390xx-dkms 390.157-25
+  Clang: 22.1.8 (Clang 220108)
+  Linker: LLD
+  Kernel LTO: ThinLTO
+
+Original failure:
+  nvidia/nv-gpu-numa.c:161:5: error: call to undeclared library function 'strncpy'
+  ISO C99 and later do not support implicit function declarations
+
+Patch test:
+  0107-cachyos.patch — applied cleanly
+  0108-cachyos.patch — applied cleanly
+
+Compiler test:
+  GCC build failed because the kernel's Clang/LLVM-specific flags and LTO objects are incompatible with the GCC build path.
+  CC=clang alone failed because nvidia/nv-frontend.o was LLVM IR bitcode and could not be linked by the non-LLVM path.
+
+Successful command:
+  make -j"$(nproc)" \
+    LLVM=1 \
+    CC=clang \
+    LD=ld.lld \
+    AR=llvm-ar \
+    NM=llvm-nm \
+    HOSTCC=clang \
+    HOSTLD=ld.lld \
+    IGNORE_CC_MISMATCH=1 \
+    IGNORE_PREEMPT_RT_PRESENCE=1 \
+    KERNEL_UNAME=7.2.8-1-cachyos \
+    modules
+
+Result:
+  MODPOST Module.symvers
+  LD [M] nvidia.ko
+  LD [M] nvidia-modeset.ko
+  LD [M] nvidia-uvm.ko
+  LD [M] nvidia-drm.ko
+  BTF [M] nvidia-modeset.ko
+  BTF [M] nvidia.ko
+  BTF [M] nvidia-uvm.ko
+  BTF [M] nvidia-drm.ko
+
+Status: SUCCESS
+
+Warnings:
+  objtool reported data relocation to !ENDBR warnings.
+  modpost reported missing MODULE_DESCRIPTION() in nvidia-uvm.o.
+  These warnings did not prevent module generation.
