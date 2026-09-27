@@ -132,7 +132,7 @@ Generated successfully:
 - `nvidia-uvm.ko`
 - `nvidia-drm.ko`
 
-See [logs/build-7.2.8-success.log](logs/build-7.2.8-success.log) for the recorded result.
+See the **raw build log** captured from the successful build: [logs/build-7.2.8-success.log](logs/build-7.2.8-success.log). It contains the original build output rather than a reconstructed summary.
 
 ## Important status
 
