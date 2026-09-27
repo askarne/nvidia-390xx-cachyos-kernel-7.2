@@ -138,7 +138,15 @@ Final stages included:
     BTF [M] nvidia-uvm.ko
     BTF [M] nvidia-drm.ko
 
-## 9. Build warnings
+## 9. Raw build log
+
+The complete raw output of the successful `7.2.8-1-cachyos` module build is preserved in:
+
+    logs/build-7.2.8-success.log
+
+This file is the original captured build output, not a manually reconstructed summary. It includes the compiler output, warnings, module linking, and final build stages.
+
+## 10. Build warnings
 
 The successful build still emitted:
 
@@ -147,7 +155,7 @@ The successful build still emitted:
 
 These warnings did not prevent module generation and are retained in the build log.
 
-## 10. Existing DKMS configuration
+## 11. Existing DKMS configuration
 
 The installed NVIDIA DKMS configuration contains the equivalent of:
 
@@ -162,7 +170,7 @@ Declared modules:
     BUILT_MODULE_NAME[2]="nvidia-modeset"
     BUILT_MODULE_NAME[3]="nvidia-drm"
 
-## 11. DKMS integration status
+## 12. DKMS integration status
 
 DKMS version is `3.4.3`.
 
@@ -172,7 +180,7 @@ No permanent DKMS override was installed before verifying the exact DKMS 3.4.3 p
 
 The next technical step is to verify the installed DKMS 3.4.3 patch/override syntax and then perform a kernel-specific DKMS build/install for `7.2.8-1-cachyos`, without removing the working `6.18.52-1-cachyos` registration.
 
-## 12. Preservation constraint
+## 13. Preservation constraint
 
 Do not use:
 
@@ -184,7 +192,7 @@ Subsequent DKMS tests should be scoped specifically to:
 
     7.2.8-1-cachyos
 
-## 13. Project contents
+## 14. Project contents
 
     nvidia-390xx-cachyos-kernel-7.2/
     ├── README.md
@@ -197,7 +205,7 @@ Subsequent DKMS tests should be scoped specifically to:
 
 The project intentionally excludes NVIDIA proprietary source archives, binary modules, object files, kernel build trees, extracted RPM/source trees, and generated build artifacts.
 
-## 14. Reproducibility statement
+## 15. Reproducibility statement
 
 At the current stage we have reproduced:
 
