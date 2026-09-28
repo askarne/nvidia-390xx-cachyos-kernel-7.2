@@ -1,12 +1,20 @@
 # NVIDIA 390xx DKMS on CachyOS Kernel 7.2
 
-Patches and build documentation for NVIDIA 390.157 on CachyOS kernel 7.2.x.
+Patches and DKMS configuration for NVIDIA 390.157 on CachyOS kernel 7.2.x.
 
 ## Why this project exists
 
-NVIDIA 390.157 is a legacy proprietary driver. On CachyOS kernel 7.2.8-1-cachyos, the unmodified source fails because Linux 7.2 removed kernel strncpy() and renamed the DRM atomic interface from struct drm_atomic_state to struct drm_atomic_commit.
+NVIDIA 390.157 is a legacy proprietary driver and its original kernel interface code predates several Linux 7.2 API changes.
 
-The project provides the minimum compatibility layer required for the old driver to build against the tested CachyOS 7.2 kernel.
+On CachyOS kernel `7.2.8-1-cachyos`, the unmodified 390.157 source fails to build. The two relevant compatibility problems are:
+
+1. **Linux 7.2 removed the kernel `strncpy()` API.**  
+   NVIDIA 390.157 still calls `strncpy()` in several places. The compatibility patch changes those calls to the appropriate newer string helpers while retaining compatibility with older kernels.
+
+2. **Linux 7.2 renamed the DRM atomic state interface.**  
+   `struct drm_atomic_state` and related APIs were renamed to `struct drm_atomic_commit`. The DRM patch updates NVIDIA's 390xx DRM/KMS integration and its conftest checks to handle the new interface, while retaining compatibility with older kernels.
+
+The goal is therefore **not to modify NVIDIA's driver design**, but to provide the kernel-compatibility layer required for the old 390.157 source to build against newer CachyOS kernels.
 
 ## Tested environment
 
@@ -25,170 +33,259 @@ The project provides the minimum compatibility layer required for the old driver
 
 ## Patch sources and provenance
 
-The patches are adapted from RPM Fusion's NVIDIA 390xx kmod patches released in nvidia-390xx-kmod-390.157-27.fc43.
+The patches in this repository are **adapted from RPM Fusion's NVIDIA 390xx kmod patches** released in `nvidia-390xx-kmod-390.157-27.fc43`.
 
-Upstream patch files:
-- nvidia-390xx-kmod-0107-adaptation-to-new-struct-drm-atomic-commit.patch
-- nvidia-390xx-kmod-0108-kernel-7.2-remove-strncpy-kernel-function.patch
+The upstream patch files used as the basis for this repository were:
 
-For CachyOS, the only source-tree adaptation was stripping the kernel/ path component so the patches apply with patch -p1. The repository patch files were byte-for-byte verified against the corresponding local RPM Fusion patch files.
+- `nvidia-390xx-kmod-0107-adaptation-to-new-struct-drm-atomic-commit.patch`
+- `nvidia-390xx-kmod-0108-kernel-7.2-remove-strncpy-kernel-function.patch`
 
-### Patch checksums
+For CachyOS, the adaptation made for this repository was limited to the source-tree path layout: the `kernel/` path component used by the RPM Fusion source package was stripped so the patches apply with `patch -p1` to the CachyOS NVIDIA 390.157 source tree.
 
-NaN0107-cachyos.patch` — e918d44a27ffb6e7a36b5dc249d28114de79e56faa9456c6b389128f2b628d82
-
-NaN0108-cachyos.patch` — 09f09f41e7d240c58aa67e43c58ba348345bf4cc2f199fe40e960712722c1544
+The repository patch files were byte-for-byte verified against the corresponding local RPM Fusion patch files.
 
 ### Primary sources
 
-- RPM Fusion source RPM directory
-- RPM Fusion 390.157-27 package information and changelog
-- Linux commit 079a028d6327e68cfa5d38b36123637b321c19a7: removal of strncpy()
-- Linux commit 5164f7e7ff8ec7d41065d3862630c2ba09854328: drm_atomic_state → drm_atomic_commit
+- [RPM Fusion source RPM directory](https://archive.rpmfusion.org/Mirrors/rpmfusion.org/nonfree/fedora/updates/43/SRPMS/n/)
+- [RPM Fusion 390.157-27 package information and changelog](https://www.rpmfind.net/linux/RPM/rpmfusion/nonfree/fedora/updates/testing/43/x86_64/k/kmod-nvidia-390xx-390.157-27.fc43.x86_64.html)
+- [Linux: removal of `strncpy()`](https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/079a028d6327e68cfa5d38b36123637b321c19a7)
+- [Linux DRM rename: `drm_atomic_state` → `drm_atomic_commit`](https://git.zx2c4.com/wireguard-linux/commit/drivers/gpu/drm/nouveau?h=davem%2Fnet&id=5164f7e7ff8ec7d41065d3862630c2ba09854328)
 
 ## What each patch does
 
 ### 0107-cachyos.patch — DRM atomic commit API
 
-Updates NVIDIA DRM/KMS code, conftest detection, atomic callbacks, allocation/cleanup wrappers, reference-counting detection, structures and function signatures for the Linux 7.2 rename from drm_atomic_state to drm_atomic_commit, while retaining older-kernel compatibility.
+This patch updates the 390xx DRM/KMS layer for the Linux 7.2 rename from:
 
-### 0108-cachyos.patch — removal of kernel strncpy()
+`struct drm_atomic_state`
 
-Replaces affected uses with strscpy() or strscpy_pad() while retaining compatibility with older kernels. Affected files:
-- nvidia/nv-gpu-numa.c
-- nvidia/os-interface.c
-- nvidia-uvm/uvm8_pmm_gpu.c
-- nvidia-modeset/nvidia-modeset-linux.c
+to:
 
-## Original build failure
+`struct drm_atomic_commit`
 
-Stock NVIDIA 390.157 failed in nvidia/nv-gpu-numa.c with:
+It updates:
+- DRM conftest detection
+- atomic check callbacks
+- atomic state allocation/cleanup wrappers
+- reference-counting detection
+- NVIDIA DRM KMS structures and function signatures
+- compatibility aliases for kernels older than 7.2
 
-NaNerror: call to undeclared library function 'strncpy'`
-NaNISO C99 and later do not support implicit function declarations`
+### 0108-cachyos.patch — removal of kernel `strncpy()`
 
-Adding linux/string.h did not fix the Linux 7.2 API removal, so the source was restored clean before applying the compatibility patch.
+Linux 7.2 removed the generic kernel `strncpy()` API. The NVIDIA 390xx source still used it.
 
-## Compiler/toolchain investigation
+This patch changes the affected code paths to:
+- `strscpy()` where NUL-terminated copying is required
+- `strscpy_pad()` where the original padding semantics matter
 
-The CachyOS kernel uses LLVM-specific flags including -mstack-alignment=8, -mretpoline-external-thunk, -fexperimental-late-parse-attributes, -fsplit-lto-unit, -mllvm, -fdebug-info-for-profiling and -improved-fs-discriminator=true.
-
-GCC therefore failed because of LLVM-specific kernel flags. CC=clang alone also failed because nvidia/nv-frontend.o was LLVM IR bitcode. The successful build required the complete LLVM/LLD path.
-
-## Patch validation
-
-Both patches were dry-run and then actually applied to a clean NVIDIA 390.157 source tree with patch --dry-run -p1 and patch -p1. The resulting source was checked for drm_atomic_commit and the expected strscpy/strscpy_pad changes.
-
-## Successful manual build
-
-NaNcd /tmp/nvidia-390.157-test`
-
-NaNmake clean`
-
-NaNmake -j$(nproc) LLVM=1 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm HOSTCC=clang HOSTLD=ld.lld IGNORE_CC_MISMATCH=1 IGNORE_PREEMPT_RT_PRESENCE=1 KERNEL_UNAME=7.2.8-1-cachyos modules`
-
-Generated successfully: nvidia.ko, nvidia-modeset.ko, nvidia-uvm.ko, nvidia-drm.ko.
-
-The complete raw build output is preserved in logs/build-7.2.8-success.log.
+Affected source areas:
+- `nvidia/nv-gpu-numa.c`
+- `nvidia/os-interface.c`
+- `nvidia-uvm/uvm8_pmm_gpu.c`
+- `nvidia-modeset/nvidia-modeset-linux.c`
 
 ## DKMS configuration
 
-DKMS 3.4.3 supports kernel-specific PATCH/PATCH_MATCH and MAKE/MAKE_MATCH overrides.
+DKMS 3.4.3 supports kernel-specific `PATCH[]/PATCH_MATCH[]` and `MAKE[]/MAKE_MATCH[]` overrides.
 
-Files:
-- /etc/dkms/nvidia/patches/0107-cachyos.patch
-- /etc/dkms/nvidia/patches/0108-cachyos.patch
-- /etc/dkms/nvidia-390.157.conf
+This project uses:
 
-Exact override:
+`/etc/dkms/nvidia-390.157.conf`
 
-NaNPATCH[0]="0107-cachyos.patch"`
-NaNPATCH_MATCH[0]="^7\.2\."`
+with the two patches stored in:
 
-NaNPATCH[1]="0108-cachyos.patch"`
-NaNPATCH_MATCH[1]="^7\.2\."`
+`/etc/dkms/nvidia/patches/`
 
-NaNMAKE[1]="'make' -j`nproc` LLVM=1 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm HOSTCC=clang HOSTLD=ld.lld IGNORE_CC_MISMATCH=1 IGNORE_PREEMPT_RT_PRESENCE=1 NV_EXCLUDE_BUILD_MODULES='__EXCLUDE_MODULES' KERNEL_UNAME=${kernelver} modules"`
-NaNMAKE_MATCH[1]="^7\.2\."`
+The override applies both patches only to kernels matching `^7\.2\.` and selects the full LLVM/LLD build command for those kernels. The original DKMS `MAKE[0]` remains the default for kernels that do not match, preserving the existing LTS configuration.
 
-The 7.2 regex matches 7.2.8-1-cachyos and does not match 6.18.52-1-cachyos-lts, preserving the working LTS registration.
+Example override:
 
-## DKMS build and installation verification
+```
+PATCH[0]="0107-cachyos.patch"
+PATCH_MATCH[0]="^7\.2\."
 
-NaNsudo dkms build -m nvidia -v 390.157 -k 7.2.8-1-cachyos`
+PATCH[1]="0108-cachyos.patch"
+PATCH_MATCH[1]="^7\.2\."
 
-Verified: both patches applied, module build completed, and all four modules were signed by DKMS.
+MAKE[1]="'make' -j`nproc` LLVM=1 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm HOSTCC=clang HOSTLD=ld.lld IGNORE_CC_MISMATCH=1 IGNORE_PREEMPT_RT_PRESENCE=1 NV_EXCLUDE_BUILD_MODULES='__EXCLUDE_MODULES' KERNEL_UNAME=\${kernelver} modules"
+MAKE_MATCH[1]="^7\.2\."
+```
 
-NaNsudo dkms install -m nvidia -v 390.157 -k 7.2.8-1-cachyos`
+## Applying the fix
 
-Verified installation placed the compressed modules under /lib/modules/7.2.8-1-cachyos/updates/dkms/ and depmod completed successfully.
+These steps are scoped to NVIDIA 390.157 and kernel 7.2.x. They do **not** remove the working LTS registration.
 
-Final DKMS status:
-NaNnvidia/390.157, 6.18.52-1-cachyos-lts, x86_64: installed`
-NaNnvidia/390.157, 7.2.8-1-cachyos, x86_64: installed`
+### 1. Install the patches
 
-modinfo confirmed NVIDIA 390.157 and the DKMS module signing key.
+```
+sudo mkdir -p /etc/dkms/nvidia/patches
+sudo cp 0107-cachyos.patch 0108-cachyos.patch /etc/dkms/nvidia/patches/
+```
 
-## Post-reboot runtime verification
+If applying from a clone of this repository, run the commands from the repository directory.
 
-After rebooting into the target kernel:
+### 2. Install the DKMS override
 
-NaNuname -r`
-NaN7.2.8-1-cachyos`
+Create:
 
-NaNnvidia-smi`
-NaNNVIDIA-SMI 390.157`
-NaNDriver Version: 390.157`
-NaNGPU: GeForce GT 720M`
-NaNMemory: 0MiB / 1985MiB`
+`/etc/dkms/nvidia-390.157.conf`
+
+with:
+
+```
+PATCH[0]="0107-cachyos.patch"
+PATCH_MATCH[0]="^7\.2\."
+
+PATCH[1]="0108-cachyos.patch"
+PATCH_MATCH[1]="^7\.2\."
+
+MAKE[1]="'make' -j`nproc` LLVM=1 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm HOSTCC=clang HOSTLD=ld.lld IGNORE_CC_MISMATCH=1 IGNORE_PREEMPT_RT_PRESENCE=1 NV_EXCLUDE_BUILD_MODULES='__EXCLUDE_MODULES' KERNEL_UNAME=\${kernelver} modules"
+MAKE_MATCH[1]="^7\.2\."
+```
+
+Verify the configuration can be read:
+
+```
+dkms status
+```
+
+### 3. Build only for the target kernel
+
+```
+sudo dkms build -m nvidia -v 390.157 -k 7.2.8-1-cachyos
+```
+
+Expected relevant output:
+
+```
+Applying patch 0107-cachyos.patch... done.
+Applying patch 0108-cachyos.patch... done.
+Building module(s)... done.
+```
+
+### 4. Install only for the target kernel
+
+```
+sudo dkms install -m nvidia -v 390.157 -k 7.2.8-1-cachyos
+```
+
+Verify:
+
+```
+dkms status
+sudo modinfo -F filename nvidia
+```
+
+The target should show:
+
+```
+nvidia/390.157, 7.2.8-1-cachyos, x86_64: installed
+```
+
+and the module path should be under:
+
+``/lib/modules/7.2.8-1-cachyos/updates/dkms/``
+
+### 5. Reboot and verify actual runtime
+
+Boot the target kernel and run:
+
+```
+uname -r
+nvidia-smi
+lsmod | grep '^nvidia'
+```
+
+A successful runtime test should show:
+- `uname -r` → `7.2.8-1-cachyos`
+- `nvidia-smi` → NVIDIA driver `390.157` and the GPU
+- `lsmod` → `nvidia`, `nvidia_uvm`, `nvidia_modeset`, and `nvidia_drm`
+
+## Verified result
+
+The procedure above was successfully tested on the Dell Latitude E5440.
+
+After rebooting into `7.2.8-1-cachyos`:
+
+```
+uname -r
+7.2.8-1-cachyos
+```
+
+```
+nvidia-smi
+NVIDIA-SMI 390.157
+Driver Version: 390.157
+GPU: GeForce GT 720M
+Memory: 0MiB / 1985MiB
+```
 
 Loaded modules:
-NaNnvidia_drm`
-NaNnvidia_modeset`
-NaNnvidia_uvm`
-NaNnvidia`
 
-This is a real post-reboot runtime test, not only a compilation or installation test.
+```
+nvidia_drm
+nvidia_modeset
+nvidia_uvm
+nvidia
+```
+
+DKMS status after installation:
+
+```
+nvidia/390.157, 6.18.52-1-cachyos-lts, x86_64: installed
+nvidia/390.157, 7.2.8-1-cachyos, x86_64: installed
+```
+
+The installed module was confirmed with:
+
+```
+sudo modinfo -F filename nvidia
+/lib/modules/7.2.8-1-cachyos/updates/dkms/nvidia.ko.zst
+```
+
+and:
+
+```
+sudo modinfo nvidia | grep -E '^(version|filename|signer):'
+```
+
+reported NVIDIA `390.157` and the DKMS module signing key.
+
+This is a **real post-reboot runtime test**, not only a successful compilation test.
 
 ## Build warnings
 
-- multiple objtool: data relocation to !ENDBR warnings
-- WARNING: modpost: missing MODULE_DESCRIPTION() in nvidia-uvm.o
+The successful build emitted:
+- multiple `objtool: data relocation to !ENDBR` warnings
+- `WARNING: modpost: missing MODULE_DESCRIPTION() in nvidia-uvm.o`
 
-These warnings did not prevent module generation, installation, loading, or nvidia-smi verification on the tested system.
+These warnings did not prevent module generation or runtime loading on the tested system.
 
-## Verified final state
-
-NVIDIA 390.157 successfully builds, installs through DKMS, loads after reboot, and is detected by nvidia-smi on CachyOS kernel 7.2.8-1-cachyos. The known-working 6.18.52-1-cachyos-lts DKMS registration remains installed.
-
-## Applying the fix to another system
-
-For the tested CachyOS configuration: copy both patches to /etc/dkms/nvidia/patches/, create /etc/dkms/nvidia-390.157.conf with the override above, build and install for the target 7.2.x kernel, reboot, then verify uname -r, lsmod and nvidia-smi.
-
-Do not assume the LLVM/LLD command is required by other distributions; it reflects the tested CachyOS kernel toolchain.
-
-## Reproducibility
-
-The result was reproduced from a clean NVIDIA 390.157 source tree by applying both patches, building with the complete LLVM/LLD toolchain, registering and installing through DKMS, rebooting, and verifying the running driver with nvidia-smi. The raw build log is preserved.
+The complete original build output is preserved in [`logs/build-7.2.8-success.log`](logs/build-7.2.8-success.log).
 
 ## Repository contents
 
-NaNnvidia-390xx-cachyos-kernel-7.2/`
-NaN├── README.md`
-NaN├── FULL-REPORT.md`
-NaN├── patches/`
-NaN│   ├── 0107-cachyos.patch`
-NaN│   └── 0108-cachyos.patch`
-NaN└── logs/`
-NaN    └── build-7.2.8-success.log`
+```
+nvidia-390xx-cachyos-kernel-7.2/
+├── README.md
+├── FULL-REPORT.md
+├── patches/
+│   ├── 0107-cachyos.patch
+│   └── 0108-cachyos.patch
+└── logs/
+    └── build-7.2.8-success.log
+```
 
 ## Important limitations
 
-- Targets NVIDIA 390.157 and the tested CachyOS 7.2.x environment.
-- Runtime is verified on 7.2.8-1-cachyos; this is not proof for every future 7.2.x kernel.
-- The patches are compatibility adaptations, not a modernization of the legacy driver.
-- The repository does not redistribute NVIDIA proprietary source archives, binary modules, object files, or generated proprietary build artifacts.
+- This project targets NVIDIA 390.157 and the tested CachyOS 7.2.x environment.
+- The runtime result is verified on kernel `7.2.8-1-cachyos`; it should not be interpreted as proof that every future 7.2.x kernel will remain compatible.
+- The patches are compatibility adaptations; they do not make the legacy NVIDIA driver a modern driver.
+- The repository does not redistribute NVIDIA proprietary source archives or binary modules.
 
 ## License / redistribution
 
-This repository contains compatibility patches derived from publicly available RPM Fusion packaging work, documentation, and build evidence. It does not redistribute NVIDIA proprietary source archives or binary modules.
+This repository does not redistribute NVIDIA's proprietary source archive, binary modules, object files, or generated build artifacts.
+
+It contains compatibility patches derived from publicly available RPM Fusion packaging work, plus documentation and build evidence for the CachyOS kernel 7.2.x environment.
