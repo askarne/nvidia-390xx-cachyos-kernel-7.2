@@ -389,13 +389,7 @@ The exact KDE session available depends on what is installed.
 
 If the machine has only a Wayland KDE session and you want the verified native-X11 path, install the KDE X11 session from a terminal/TTY.
 
-On CachyOS/Arch, first refresh package databases:
-
-```bash
-sudo pacman -Sy
-```
-
-Then search for the available Plasma X11 session package:
+On CachyOS/Arch, first search for the available Plasma X11 session package:
 
 ```bash
 pacman -Ss plasma x11 session
