@@ -439,3 +439,44 @@ The runtime result is verified specifically on `7.2.8-1-cachyos`. Future kernel 
         └── build-7.2.8-success.log
 
 The project intentionally excludes NVIDIA proprietary source archives, binary modules, object files, extracted RPM/source trees, kernel build trees, and generated build artifacts.
+
+
+---
+
+# 20. Update after kernel 7.2.8-2
+
+The machine was subsequently updated from `7.2.8-1-cachyos` to `7.2.8-2-cachyos` and rebooted.
+
+The verified DKMS state is:
+
+```text
+nvidia/390.157, 6.18.52-1-cachyos-lts, x86_64: installed
+nvidia/390.157, 7.2.8-2-cachyos, x86_64: installed
+nvidia-390.157/patched: added
+```
+
+The first two lines are the working installed registrations. The third line is a stale/duplicate registration left from the earlier DKMS setup and is not required for the working driver.
+
+During the kernel transaction, DKMS attempted to process that stale registration and reported:
+
+```text
+Error! Patch 0107-cachyos.patch as specified in dkms.conf cannot be
+found in /var/lib/dkms/nvidia-390.157/patched/build/patches/.
+```
+
+The compatibility patches themselves were present at:
+
+```text
+/etc/dkms/nvidia/patches/0107-cachyos.patch
+/etc/dkms/nvidia/patches/0108-cachyos.patch
+```
+
+Therefore this update failure belonged to the stale `nvidia-390.157/patched` DKMS registration and its expected patch-tree layout. It did not invalidate the compatibility patches or the normal `nvidia/390.157` registration.
+
+The corrected documentation and recovery procedure are maintained in:
+
+`NVIDIA-390.157-CURRENT-DKMS-UPDATE.md`
+
+### Future-kernel verification status
+
+Automatic success on a kernel newer than `7.2.8-2-cachyos` has not yet been experimentally verified. The next kernel update is the definitive test of whether the corrected DKMS configuration reapplies the patches automatically.
