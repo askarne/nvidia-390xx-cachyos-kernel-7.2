@@ -404,7 +404,7 @@ plasma-x11-session
 Install it:
 
 ```bash
-sudo pacman -S plasma-x11-session
+sudo pacman -S plasma-x11-session kwin-x11
 ```
 
 If the package is already installed, pacman will report that it is up to date.
