@@ -289,3 +289,35 @@ nvidia-390xx-cachyos-kernel-7.2/
 This repository does not redistribute NVIDIA's proprietary source archive, binary modules, object files, or generated build artifacts.
 
 It contains compatibility patches derived from publicly available RPM Fusion packaging work, plus documentation and build evidence for the CachyOS kernel 7.2.x environment.
+
+
+## Current status — 2026-10-03
+
+The latest CachyOS kernel update moved the system from `7.2.8-1-cachyos` to `7.2.8-2-cachyos`. After the update and reboot, DKMS reports:
+
+```text
+nvidia/390.157, 6.18.52-1-cachyos-lts, x86_64: installed
+nvidia/390.157, 7.2.8-2-cachyos, x86_64: installed
+```
+
+A stale registration named `nvidia-390.157/patched` was also found as `added`. It is not the working NVIDIA registration and should not be confused with `nvidia/390.157`.
+
+During the update, that stale registration caused:
+
+```text
+Error! Patch 0107-cachyos.patch ... cannot be found in
+/var/lib/dkms/nvidia-390.157/patched/build/patches/
+```
+
+The actual compatibility patches remain at:
+
+```text
+/etc/dkms/nvidia/patches/0107-cachyos.patch
+/etc/dkms/nvidia/patches/0108-cachyos.patch
+```
+
+This was a stale/duplicate DKMS-state problem, not a failure of the two compatibility patches themselves. The current working registration is `nvidia/390.157`.
+
+For the complete current DKMS/update procedure and the exact commands used during the investigation, see [`NVIDIA-390.157-CURRENT-DKMS-UPDATE.md`](NVIDIA-390.157-CURRENT-DKMS-UPDATE.md).
+
+**Important:** automatic success on a future kernel release has not yet been experimentally verified. The next kernel update is the real test of the corrected DKMS configuration.
